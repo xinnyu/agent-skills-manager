@@ -1,0 +1,15 @@
+.claude/
+.asm/
+.agents/
+.discussions/
+.forge
+findings.md
+progress.md
+task_plan.md
+node_modules/
+dist/
+bun.lock
+.handoffs/
+
+# Loom
+.loom
