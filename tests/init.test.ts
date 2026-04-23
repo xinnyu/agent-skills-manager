@@ -50,6 +50,18 @@ describe("initRegistry()", () => {
     expect(asmrcContent.trim()).toBe(registryDir);
   });
 
+  test("creates asm.toml with default targets for all supported CLIs", async () => {
+    const registryDir = join(tempDir, "my-registry");
+    await initRegistry(registryDir);
+
+    const asmTomlContent = await readFile(join(registryDir, "asm.toml"), "utf-8");
+    expect(asmTomlContent).toContain("[config]");
+    expect(asmTomlContent).toContain("[targets]");
+    expect(asmTomlContent).toContain('claude = "~/.claude/skills"');
+    expect(asmTomlContent).toContain('codex = "~/.agents/skills"');
+    expect(asmTomlContent).toContain('kiro = "~/.kiro/skills"');
+  });
+
   test("works with already existing directory", async () => {
     const registryDir = join(tempDir, "existing");
     const { mkdir } = await import("node:fs/promises");

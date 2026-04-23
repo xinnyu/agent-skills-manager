@@ -34,18 +34,18 @@ afterEach(async () => {
 });
 
 describe("discoverSkills()", () => {
-  test("defaults to the user home root and discovers claude and codex skills recursively", async () => {
+  test("defaults to the user home root and discovers supported skills recursively", async () => {
     const claudeSkillDir = join(tempDir, "Developer", "proj-a", ".claude", "skills", "alpha");
     const codexSkillDir = join(tempDir, "Projects", "proj-b", ".agents", "skills", "beta");
     const externalSkillDir = join(tempDir, "external-skill");
-    const symlinkSkillPath = join(tempDir, "Sandbox", "proj-c", ".claude", "skills", "gamma");
+    const symlinkSkillPath = join(tempDir, "Sandbox", "proj-c", ".kiro", "skills", "gamma");
 
     await writeSkill(claudeSkillDir, "Alpha description");
     await writeSkill(codexSkillDir, "Beta description");
     await gitInit(codexSkillDir);
     await writeSkill(externalSkillDir, "Gamma description");
 
-    await mkdir(join(tempDir, "Sandbox", "proj-c", ".claude", "skills"), { recursive: true });
+    await mkdir(join(tempDir, "Sandbox", "proj-c", ".kiro", "skills"), { recursive: true });
     await symlink(externalSkillDir, symlinkSkillPath);
 
     const result = await discoverSkills();
@@ -69,7 +69,7 @@ describe("discoverSkills()", () => {
       path: codexSkillDir,
     });
     expect(byName.get("gamma")).toMatchObject({
-      kind: "claude",
+      kind: "kiro",
       type: "symlink",
       description: "Gamma description",
       path: symlinkSkillPath,
@@ -104,9 +104,9 @@ describe("discoverSkills()", () => {
 
   test("skips node_modules, .git, and Library while scanning roots", async () => {
     await writeSkill(join(tempDir, "node_modules", "pkg", ".claude", "skills", "ignored-node"), "skip");
-    await writeSkill(join(tempDir, ".git", "repo", ".agents", "skills", "ignored-git"), "skip");
-    await writeSkill(join(tempDir, "Library", "Stuff", ".claude", "skills", "ignored-library"), "skip");
-    await writeSkill(join(tempDir, "Work", "proj", ".agents", "skills", "kept-skill"), "keep");
+    await writeSkill(join(tempDir, ".git", "repo", ".kiro", "skills", "ignored-git"), "skip");
+    await writeSkill(join(tempDir, "Library", "Stuff", ".kiro", "skills", "ignored-library"), "skip");
+    await writeSkill(join(tempDir, "Work", "proj", ".kiro", "skills", "kept-skill"), "keep");
 
     const result = await discoverSkills({ roots: [tempDir] });
 
@@ -116,7 +116,7 @@ describe("discoverSkills()", () => {
     expect(result.value).toHaveLength(1);
     expect(result.value[0]).toMatchObject({
       name: "kept-skill",
-      kind: "codex",
+      kind: "kiro",
     });
   });
 });

@@ -21,7 +21,11 @@ describe("readConfig() — reading <registry>/asm.toml", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value.defaultScope).toBe("user");
-      expect(result.value.targets).toEqual({});
+      expect(result.value.targets).toEqual({
+        claude: "~/.claude/skills",
+        codex: "~/.agents/skills",
+        kiro: "~/.kiro/skills",
+      });
       expect(result.value.vendors).toEqual({});
     }
   });
@@ -46,6 +50,7 @@ describe("readConfig() — reading <registry>/asm.toml", () => {
     if (result.ok) {
       expect(result.value.targets.claude).toBe("~/.claude/skills");
       expect(result.value.targets.codex).toBe("~/.codex/skills");
+      expect(result.value.targets.kiro).toBe("~/.kiro/skills");
     }
   });
 
@@ -82,6 +87,8 @@ url = "https://github.com/test/skill.git"
     if (result.ok) {
       expect(result.value.defaultScope).toBe("project");
       expect(result.value.targets.claude).toBe("~/.claude/skills");
+      expect(result.value.targets.codex).toBe("~/.agents/skills");
+      expect(result.value.targets.kiro).toBe("~/.kiro/skills");
       expect(result.value.vendors["my-vendor"].url).toBe("https://github.com/test/skill.git");
     }
   });
@@ -97,7 +104,11 @@ describe("readConfig() — defaults when sections missing", () => {
     if (result.ok) {
       expect(result.value.defaultScope).toBe("user");
 
-      expect(result.value.targets).toEqual({});
+      expect(result.value.targets).toEqual({
+        claude: "~/.claude/skills",
+        codex: "~/.agents/skills",
+        kiro: "~/.kiro/skills",
+      });
       expect(result.value.vendors).toEqual({});
     }
   });
@@ -112,17 +123,38 @@ describe("readConfig() — defaults when sections missing", () => {
       expect(result.value.defaultScope).toBe("user");
 
       expect(result.value.targets.claude).toBe("~/.claude/skills");
+      expect(result.value.targets.codex).toBe("~/.agents/skills");
+      expect(result.value.targets.kiro).toBe("~/.kiro/skills");
     }
   });
 
-  test("returns empty targets when [targets] section missing", async () => {
+  test("backfills default targets when [targets] section is missing", async () => {
     const path = join(tempDir, "asm.toml");
     await writeFile(path, "[config]\n");
 
     const result = await readConfig(path);
     expect(result.ok).toBe(true);
     if (result.ok) {
-      expect(result.value.targets).toEqual({});
+      expect(result.value.targets).toEqual({
+        claude: "~/.claude/skills",
+        codex: "~/.agents/skills",
+        kiro: "~/.kiro/skills",
+      });
+    }
+  });
+
+  test("backfills missing default targets into existing [targets]", async () => {
+    const path = join(tempDir, "asm.toml");
+    await writeFile(path, '[config]\n\n[targets]\nclaude = "~/.claude/skills"\n');
+
+    const result = await readConfig(path);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.targets).toEqual({
+        claude: "~/.claude/skills",
+        codex: "~/.agents/skills",
+        kiro: "~/.kiro/skills",
+      });
     }
   });
 });

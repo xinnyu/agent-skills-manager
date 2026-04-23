@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readFile, writeFile, mkdir, realpath } from "node:fs/promises";
+import { readFile, writeFile, mkdir, realpath, lstat, rm } from "node:fs/promises";
 import { dirname, join } from "node:path";
 
 import type { Result, RegistrySkill, SyncPlan, TargetsConfig, ProjectManifest } from "../types";
@@ -16,6 +16,12 @@ import {
   userManifestPath,
   projectSkillsTargets,
 } from "../utils/paths";
+
+export interface SyncConflict {
+  skillName: string;
+  targetPath: string;
+  sourcePath: string;
+}
 
 function computeHash(skills: RegistrySkill[], targets: TargetsConfig): string {
   const hash = createHash("sha256");
@@ -96,6 +102,7 @@ async function reconcile(
   plan: SyncPlan,
   mPath: string,
   targetDir: string,
+  confirmReplaceDir?: (conflict: SyncConflict) => Promise<boolean>,
 ): Promise<Result<void>> {
   const managed = await readManaged(mPath);
   if (!managed.ok) return managed;
@@ -122,6 +129,35 @@ async function reconcile(
       // Already correct
       newManaged.links[name] = { target: expected.source };
       continue;
+    }
+
+    try {
+      const stat = await lstat(expected.target);
+      if (stat.isDirectory() && !stat.isSymbolicLink()) {
+        if (!confirmReplaceDir) {
+          return err(`${expected.target} is a directory — remove it manually before syncing`);
+        }
+
+        const confirmed = await confirmReplaceDir({
+          skillName: name,
+          targetPath: expected.target,
+          sourcePath: expected.source,
+        });
+        if (!confirmed) {
+          return err(`Sync cancelled: ${expected.target} already exists as a directory`);
+        }
+
+        try {
+          await rm(expected.target, { recursive: true, force: true });
+        } catch (e: unknown) {
+          return err(`Failed to remove existing directory ${expected.target}: ${String(e)}`);
+        }
+      }
+    } catch (e: unknown) {
+      const code = (e as NodeJS.ErrnoException).code;
+      if (code !== "ENOENT") {
+        return err(`Failed to inspect existing target ${expected.target}: ${String(e)}`);
+      }
     }
 
     // Create/fix symlink
@@ -207,6 +243,7 @@ export interface SyncOptions {
   configPath?: string;
   cwd?: string;
   overrideSyncHashPath?: string;
+  confirmReplaceDir?: (conflict: SyncConflict) => Promise<boolean>;
 }
 
 /** Run the sync engine: scan registry, compute plan per target, reconcile if needed. */
@@ -347,7 +384,7 @@ export async function syncSkills(options: SyncOptions): Promise<Result<{ skipped
   for (const targetDir of Object.values(resolvedTargets)) {
     const plan = buildTargetPlan(userSkills, targetDir);
     const mPath = managedTomlPath(targetDir);
-    const result = await reconcile(plan, mPath, targetDir);
+    const result = await reconcile(plan, mPath, targetDir, options.confirmReplaceDir);
     if (!result.ok) return result;
   }
 
@@ -358,12 +395,17 @@ export async function syncSkills(options: SyncOptions): Promise<Result<{ skipped
       projectSkills,
       userSkillNames,
       resolvedTargets,
-    )) {
-      const projMPath = managedTomlPath(projectTarget.targetDir);
-      const projResult = await reconcile(projectTarget.plan, projMPath, projectTarget.targetDir);
-      if (!projResult.ok) return projResult;
+      )) {
+        const projMPath = managedTomlPath(projectTarget.targetDir);
+        const projResult = await reconcile(
+          projectTarget.plan,
+          projMPath,
+          projectTarget.targetDir,
+          options.confirmReplaceDir,
+        );
+        if (!projResult.ok) return projResult;
+      }
     }
-  }
 
   // 8. Write hash
   const hashWrite = await writeSavedHash(hashPath, currentHash);

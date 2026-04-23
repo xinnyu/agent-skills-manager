@@ -10,6 +10,7 @@ export interface TestEnv {
   registryDir: string;
   skillsDir: string;
   codexSkillsDir: string;
+  kiroSkillsDir: string;
   asmTomlPath: string;
   syncHashPath: string;
   cacheDir: string;
@@ -23,12 +24,14 @@ export async function createTestEnv(): Promise<TestEnv> {
   const testDir = await mkdtemp(join(tmpdir(), "asm-e2e-"));
   const skillsDir = join(testDir, ".claude", "skills");
   const codexSkillsDir = join(testDir, ".agents", "skills");
+  const kiroSkillsDir = join(testDir, ".kiro", "skills");
   const registryDir = join(testDir, "registry");
   const cacheDir = join(registryDir, ".cache");
   const configDir = join(testDir, ".asm");
 
   await mkdir(skillsDir, { recursive: true });
   await mkdir(codexSkillsDir, { recursive: true });
+  await mkdir(kiroSkillsDir, { recursive: true });
   await mkdir(registryDir, { recursive: true });
   await mkdir(cacheDir, { recursive: true });
   await mkdir(configDir, { recursive: true });
@@ -40,6 +43,7 @@ export async function createTestEnv(): Promise<TestEnv> {
     registryDir,
     skillsDir,
     codexSkillsDir,
+    kiroSkillsDir,
     asmTomlPath,
     syncHashPath: join(registryDir, ".sync-hash"),
     cacheDir,
@@ -62,7 +66,7 @@ export interface CliResult {
 
 /**
  * Run the CLI via Bun.spawn with HOME redirected to testDir so that
- * ~/.asmrc and ~/.claude/skills/ resolve inside the temp directory.
+ * ~/.asmrc and user-level skill directories resolve inside the temp directory.
  */
 export async function runCli(
   args: string[],

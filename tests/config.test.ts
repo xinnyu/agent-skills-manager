@@ -21,7 +21,11 @@ describe("readConfig()", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value.defaultScope).toBe("user");
-      expect(result.value.targets).toEqual({});
+      expect(result.value.targets).toEqual({
+        claude: "~/.claude/skills",
+        codex: "~/.agents/skills",
+        kiro: "~/.kiro/skills",
+      });
       expect(result.value.vendors).toEqual({});
     }
   });
@@ -46,6 +50,7 @@ describe("readConfig()", () => {
     if (result.ok) {
       expect(result.value.targets.claude).toBe("~/.claude/skills");
       expect(result.value.targets.codex).toBe("~/.codex/skills");
+      expect(result.value.targets.kiro).toBe("~/.kiro/skills");
     }
   });
 
@@ -100,6 +105,26 @@ describe("readConfig()", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.value.defaultScope).toBe("user");
+      expect(result.value.targets).toEqual({
+        claude: "~/.claude/skills",
+        codex: "~/.agents/skills",
+        kiro: "~/.kiro/skills",
+      });
+    }
+  });
+
+  test("backfills missing default targets into existing asm.toml during read", async () => {
+    const path = join(tempDir, "asm.toml");
+    await writeFile(path, '[config]\n\n[targets]\nclaude = "~/.claude/skills"\n');
+
+    const result = await readConfig(path);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.targets).toEqual({
+        claude: "~/.claude/skills",
+        codex: "~/.agents/skills",
+        kiro: "~/.kiro/skills",
+      });
     }
   });
 });

@@ -6,6 +6,8 @@ import {
   asmrcPath,
   registryPath,
   userSkillsDir,
+  userCodexSkillsDir,
+  userKiroSkillsDir,
   managedTomlPath,
   asmTomlPath,
   syncHashPathInRegistry,
@@ -58,6 +60,18 @@ describe("registryPath()", () => {
 describe("userSkillsDir()", () => {
   test("returns ~/.claude/skills", () => {
     expect(userSkillsDir()).toBe(join(HOME, ".claude", "skills"));
+  });
+});
+
+describe("userCodexSkillsDir()", () => {
+  test("returns ~/.agents/skills", () => {
+    expect(userCodexSkillsDir()).toBe(join(HOME, ".agents", "skills"));
+  });
+});
+
+describe("userKiroSkillsDir()", () => {
+  test("returns ~/.kiro/skills", () => {
+    expect(userKiroSkillsDir()).toBe(join(HOME, ".kiro", "skills"));
   });
 });
 

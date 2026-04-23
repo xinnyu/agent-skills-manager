@@ -215,6 +215,7 @@ const VENDOR_SCAN_MAX_DEPTH = 4;
 const DOTDIR_SKILL_PATHS = [
   [".claude", "skills"],
   [".agents", "skills"],
+  [".kiro", "skills"],
 ];
 
 /**

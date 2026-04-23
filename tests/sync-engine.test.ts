@@ -121,6 +121,50 @@ describe("syncSkills()", () => {
     expect(target).toBe(externalTarget);
   });
 
+  test("directory conflict returns an error without confirmation", async () => {
+    await mkdir(join(targetDir, "my-skill"), { recursive: true });
+
+    const result = await syncSkills(syncOpts());
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toContain("is a directory");
+    }
+  });
+
+  test("directory conflict deletes and replaces the directory after confirmation", async () => {
+    await mkdir(join(targetDir, "my-skill"), { recursive: true });
+    await writeFile(join(targetDir, "my-skill", "note.txt"), "manual", "utf-8");
+
+    const result = await syncSkills({
+      ...syncOpts(),
+      confirmReplaceDir: async (conflict) => {
+        expect(conflict.skillName).toBe("my-skill");
+        expect(conflict.targetPath).toBe(join(targetDir, "my-skill"));
+        expect(conflict.sourcePath).toBe(join(registryDir, "vendor", "my-skill"));
+        return true;
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    const target = await readlink(join(targetDir, "my-skill"));
+    expect(target).toBe(join(registryDir, "vendor", "my-skill"));
+  });
+
+  test("directory conflict cancels sync when confirmation is denied", async () => {
+    await mkdir(join(targetDir, "my-skill"), { recursive: true });
+
+    const result = await syncSkills({
+      ...syncOpts(),
+      confirmReplaceDir: async () => false,
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toContain("Sync cancelled");
+    }
+  });
+
   test("fast-path skips when hash matches", async () => {
     await syncSkills(syncOpts());
 

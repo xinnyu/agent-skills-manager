@@ -1,5 +1,5 @@
 import { describe, expect, test, beforeEach, afterEach } from "bun:test";
-import { mkdtemp, rm, stat, readFile } from "node:fs/promises";
+import { mkdtemp, rm, stat, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -56,6 +56,28 @@ describe("initRegistry()", () => {
     const asmTomlContent = await readFile(join(registryDir, "asm.toml"), "utf-8");
     expect(asmTomlContent).toContain("[config]");
     expect(asmTomlContent).toContain("[targets]");
+    expect(asmTomlContent).toContain('claude = "~/.claude/skills"');
+    expect(asmTomlContent).toContain('codex = "~/.agents/skills"');
+    expect(asmTomlContent).toContain('kiro = "~/.kiro/skills"');
+  });
+
+  test("backfills missing default targets into an existing asm.toml", async () => {
+    const registryDir = join(tempDir, "existing-targets");
+    await initRegistry(registryDir);
+
+    await writeFile(
+      join(registryDir, "asm.toml"),
+      '[config]\ndefault_scope = "user"\n\n[targets]\nclaude = "~/.claude/skills"\n',
+      "utf-8",
+    );
+
+    const result = await initRegistry(registryDir);
+    expect(result.ok).toBe(true);
+
+    const asmTomlContent = await readFile(join(registryDir, "asm.toml"), "utf-8");
+    expect(asmTomlContent).toContain('claude = "~/.claude/skills"');
+    expect(asmTomlContent).toContain('codex = "~/.agents/skills"');
+    expect(asmTomlContent).toContain('kiro = "~/.kiro/skills"');
   });
 
   test("creates .gitignore with .cache/ and .sync-hash entries", async () => {

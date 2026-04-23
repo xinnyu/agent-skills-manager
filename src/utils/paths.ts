@@ -90,6 +90,11 @@ export function userCodexSkillsDir(): string {
   return join(homedir(), ".agents", "skills");
 }
 
+/** ~/.kiro/skills/ */
+export function userKiroSkillsDir(): string {
+  return join(homedir(), ".kiro", "skills");
+}
+
 /** <targetDir>/.asm-managed.toml */
 export function managedTomlPath(targetDir: string): string {
   return join(targetDir, ".asm-managed.toml");

@@ -13,6 +13,7 @@ const EXCLUDED_DIRS = new Set(["node_modules", ".git", "Library"]);
 const SKILL_DOTDIRS = new Map<string, DiscoveredSkill["kind"]>([
   [".claude", "claude"],
   [".agents", "codex"],
+  [".kiro", "kiro"],
 ]);
 
 function normalizeRoots(roots?: string[]): string[] {

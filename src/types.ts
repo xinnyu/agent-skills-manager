@@ -96,7 +96,7 @@ export interface ScannedSkill {
 export interface DiscoveredSkill {
   name: string;
   path: string;
-  kind: "claude" | "codex";
+  kind: "claude" | "codex" | "kiro";
   type: ScannedSkillType;
   description?: string;
 }
@@ -105,4 +105,3 @@ export interface DiscoveredSkill {
 export interface DiscoverOptions {
   roots?: string[];
 }
-
