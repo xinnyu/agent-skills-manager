@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { addCoreSkill } from "../src/core/add";
-import { addVendorSkill } from "../src/core/vendor";
+import { addVendorSkill, addLocalVendor } from "../src/core/vendor";
 import { detectSkillPath, scanRegistry } from "../src/core/registry";
 import { readToml } from "../src/utils/toml";
 import { gitExec } from "../src/utils/git";
@@ -148,6 +148,48 @@ describe("addVendorSkill() (mock-free)", () => {
     // Verify symlink in target
     const target = await readlink(join(targetDir, "test-vendor"));
     expect(target).toBe(join(registryDir, "vendor", "test-vendor"));
+  });
+
+  test("records remote vendor URL in asm.toml", async () => {
+    const fakeRemote = join(tempDir, "fake-remote-config");
+    await mkdir(fakeRemote, { recursive: true });
+    await gitExec(["init"], fakeRemote);
+    await gitExec(["config", "user.email", "test@test.com"], fakeRemote);
+    await gitExec(["config", "user.name", "Test"], fakeRemote);
+    await Bun.write(join(fakeRemote, "SKILL.md"), "# Test Skill");
+    await gitExec(["add", "."], fakeRemote);
+    await gitExec(["commit", "-m", "init"], fakeRemote);
+
+    await Bun.write(join(registryDir, ".gitkeep"), "");
+    await gitExec(["add", "."], registryDir);
+    await gitExec(["commit", "-m", "init"], registryDir);
+
+    const url = `file://${fakeRemote}`;
+    const result = await addVendorSkill("test-vendor", url, registryDir, { targets: { test: targetDir } });
+    expect(result.ok).toBe(true);
+
+    const toml = await readToml(join(registryDir, "asm.toml"));
+    expect(toml.ok).toBe(true);
+    if (toml.ok) {
+      const vendor = toml.value.vendor as Record<string, { url?: string }>;
+      expect(vendor["test-vendor"]).toEqual({ url });
+    }
+  });
+
+  test("records local vendor path in asm.toml", async () => {
+    const localVendor = join(tempDir, "local-vendor");
+    await mkdir(localVendor, { recursive: true });
+    await Bun.write(join(localVendor, "SKILL.md"), "# Local Vendor");
+
+    const result = await addLocalVendor("local-vendor", localVendor, registryDir, { targets: { test: targetDir } });
+    expect(result.ok).toBe(true);
+
+    const toml = await readToml(join(registryDir, "asm.toml"));
+    expect(toml.ok).toBe(true);
+    if (toml.ok) {
+      const vendor = toml.value.vendor as Record<string, { path?: string }>;
+      expect(vendor["local-vendor"]).toEqual({ path: localVendor });
+    }
   });
 
   test("vendor repo with multiple skills creates symlinks for each", async () => {

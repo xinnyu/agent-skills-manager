@@ -178,6 +178,38 @@ export async function readConfig(overridePath?: string): Promise<Result<AsmConfi
   return parseAsmToml(raw.value, regDir);
 }
 
+/** Add or update one [vendor.<name>] entry in <registry>/asm.toml. */
+export async function upsertVendorConfig(
+  registryDir: string,
+  name: string,
+  vendorConfig: VendorConfig,
+): Promise<Result<void>> {
+  const tomlPath = asmTomlPath(registryDir);
+  const existing = await readToml(tomlPath);
+  let raw: Record<string, unknown>;
+
+  if (existing.ok) {
+    raw = existing.value;
+  } else if (existing.error.includes("File not found")) {
+    raw = {};
+  } else {
+    return existing;
+  }
+
+  if (
+    raw.vendor !== undefined &&
+    (typeof raw.vendor !== "object" || raw.vendor === null || Array.isArray(raw.vendor))
+  ) {
+    return err("Invalid [vendor]: must be a table");
+  }
+
+  const vendors = (raw.vendor ?? {}) as Record<string, unknown>;
+  vendors[name] = vendorConfig;
+  raw.vendor = vendors;
+
+  return writeToml(tomlPath, raw);
+}
+
 
 /** Write default asm.toml with [config] and [targets] sections */
 export async function writeDefaultAsmToml(registryDir: string): Promise<Result<void>> {

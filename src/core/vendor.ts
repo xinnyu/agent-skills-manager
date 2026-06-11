@@ -5,6 +5,7 @@ import type { Result, TargetsConfig } from "../types";
 import { ok, err } from "../utils/result";
 import { gitSubmoduleAdd, gitExec } from "../utils/git";
 import { ensureDir } from "../utils/fs";
+import { upsertVendorConfig } from "./config";
 import { syncSkills } from "./sync-engine";
 
 export interface VendorOptions {
@@ -26,6 +27,9 @@ export async function addVendorSkill(
   const submodulePath = join("vendor", name);
   const sub = await gitSubmoduleAdd(url, submodulePath, registryDir);
   if (!sub.ok) return sub;
+
+  const config = await upsertVendorConfig(registryDir, name, { url });
+  if (!config.ok) return config;
 
   // Sync to all targets (scanRegistry will find all SKILL.md files in the repo)
   const sync = await syncSkills({
@@ -65,6 +69,9 @@ export async function addLocalVendor(
   } catch (e: unknown) {
     return err(`Failed to create symlink for vendor "${name}": ${String(e)}`);
   }
+
+  const config = await upsertVendorConfig(registryDir, name, { path: localPath });
+  if (!config.ok) return config;
 
   const sync = await syncSkills({
     registryDir,
