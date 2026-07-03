@@ -218,12 +218,60 @@ const DOTDIR_SKILL_PATHS = [
 ];
 
 /**
- * Recursively find all directories containing SKILL.md within a vendor repo.
- * Each SKILL.md's parent directory name becomes the skill name.
+ * Read a vendor repo's own curated skill allowlist, if it ships one via the
+ * Claude Code plugin marketplace convention (.claude-plugin/plugin.json,
+ * "skills": [relative paths]). Returns null when the file is absent or
+ * doesn't declare a skills array, so callers fall back to a full scan.
+ */
+async function readVendorPluginAllowlist(repoDir: string): Promise<string[] | null> {
+  const manifestPath = join(repoDir, ".claude-plugin", "plugin.json");
+  let content: string;
+  try {
+    content = await readFile(manifestPath, "utf-8");
+  } catch {
+    return null;
+  }
+
+  let data: unknown;
+  try {
+    data = JSON.parse(content);
+  } catch {
+    return null;
+  }
+
+  if (typeof data !== "object" || data === null || !("skills" in data)) return null;
+  const skillsRaw = (data as Record<string, unknown>).skills;
+  if (!Array.isArray(skillsRaw)) return null;
+
+  return skillsRaw.filter((s): s is string => typeof s === "string");
+}
+
+/**
+ * Find all skills within a vendor repo. If the repo declares its own
+ * allowlist (see readVendorPluginAllowlist), only those paths are used —
+ * this lets a repo exclude deprecated/in-progress skills from its own
+ * subtree without per-vendor config on the ASM side. Otherwise, recursively
+ * find all directories containing SKILL.md; each SKILL.md's parent
+ * directory name becomes the skill name.
  */
 async function findSkillsInVendorRepo(
   repoDir: string,
 ): Promise<Array<{ name: string; sourcePath: string; description?: string }>> {
+  const allowlist = await readVendorPluginAllowlist(repoDir);
+  if (allowlist) {
+    const allowlisted: Array<{ name: string; sourcePath: string; description?: string }> = [];
+    for (const relPath of allowlist) {
+      const skillDir = join(repoDir, relPath);
+      const skillMdFile = Bun.file(join(skillDir, "SKILL.md"));
+      if (!(await skillMdFile.exists())) continue;
+
+      const name = skillDir.split("/").pop()!;
+      const description = await readSkillDescription(skillDir);
+      allowlisted.push({ name, sourcePath: skillDir, description });
+    }
+    return allowlisted;
+  }
+
   const results: Array<{ name: string; sourcePath: string; description?: string }> = [];
   const seenNames = new Set<string>();
 

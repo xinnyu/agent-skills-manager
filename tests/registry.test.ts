@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile, mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { detectSkillPath, readRegistryMeta, updateRegistryMeta } from "../src/core/registry";
+import { detectSkillPath, readRegistryMeta, updateRegistryMeta, scanRegistry } from "../src/core/registry";
 
 let tempDir: string;
 
@@ -136,6 +136,61 @@ describe("updateRegistryMeta()", () => {
     expect(meta.ok).toBe(true);
     if (meta.ok) {
       expect(meta.value.skillPath).toBe("new");
+    }
+  });
+});
+
+describe("scanRegistry() vendor plugin.json allowlist", () => {
+  async function writeSkill(dir: string, description: string) {
+    await mkdir(dir, { recursive: true });
+    await writeFile(join(dir, "SKILL.md"), `---\nname: x\ndescription: ${description}\n---\nbody`);
+  }
+
+  test("without plugin.json, scans every SKILL.md recursively", async () => {
+    const repo = join(tempDir, "vendor", "some-repo");
+    await writeSkill(join(repo, "skills", "engineering", "keep"), "kept");
+    await writeSkill(join(repo, "skills", "deprecated", "old"), "deprecated");
+
+    const result = await scanRegistry(tempDir);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const names = result.value.map((s) => s.name).sort();
+      expect(names).toEqual(["keep", "old"]);
+    }
+  });
+
+  test("with plugin.json skills array, only allowlisted paths are included", async () => {
+    const repo = join(tempDir, "vendor", "some-repo");
+    await writeSkill(join(repo, "skills", "engineering", "keep"), "kept");
+    await writeSkill(join(repo, "skills", "deprecated", "old"), "deprecated");
+    await mkdir(join(repo, ".claude-plugin"), { recursive: true });
+    await writeFile(
+      join(repo, ".claude-plugin", "plugin.json"),
+      JSON.stringify({ name: "some-repo", skills: ["./skills/engineering/keep"] }),
+    );
+
+    const result = await scanRegistry(tempDir);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const names = result.value.map((s) => s.name).sort();
+      expect(names).toEqual(["keep"]);
+    }
+  });
+
+  test("allowlist entry pointing at a missing SKILL.md is silently skipped", async () => {
+    const repo = join(tempDir, "vendor", "some-repo");
+    await writeSkill(join(repo, "skills", "engineering", "keep"), "kept");
+    await mkdir(join(repo, ".claude-plugin"), { recursive: true });
+    await writeFile(
+      join(repo, ".claude-plugin", "plugin.json"),
+      JSON.stringify({ name: "some-repo", skills: ["./skills/engineering/keep", "./skills/gone"] }),
+    );
+
+    const result = await scanRegistry(tempDir);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const names = result.value.map((s) => s.name).sort();
+      expect(names).toEqual(["keep"]);
     }
   });
 });
