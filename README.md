@@ -45,7 +45,35 @@ asm add awesome-skills --url https://github.com/user/awesome-skills.git
 
 # 5. 查看已安装的 skills
 asm list
+
+# 6. 检查 skill 与 companion CLI 是否版本漂移
+asm doctor
+# 需要时按 asm.toml 里声明的策略修复 CLI
+asm doctor --fix
+# 或在升级 skill 时一并修：
+asm upgrade --runtime
 ```
+
+### Companion runtime
+
+部分 vendor（如 opencli、sim-use）是 **skill 文档 + CLI 同仓**。`asm upgrade` 默认只更新 skill 内容，并报告 CLI 漂移；加 `--runtime` 才按声明策略安装/升级 binary。
+
+在 `asm.toml` 里声明：
+
+```toml
+[vendor.sim-use]
+url = "https://github.com/lycorp-jp/sim-use"
+
+[vendor.sim-use.runtime]
+bin = "sim-use"
+version_from = "git-tag"
+
+[vendor.sim-use.runtime.install]
+preferred = "brew"
+brew = "lycorp-jp/tap/sim-use"
+```
+
+vendor 仓也可自带 `asm.runtime.toml`；本地 `asm.toml` 覆盖优先。
 
 ## 架构
 

@@ -10,10 +10,55 @@ export type SkillType = "core" | "vendor";
 /** Sync target mapping (e.g., claude → ~/.claude/skills/) */
 export type TargetsConfig = Record<string, string>;
 
+/**
+ * How a companion CLI is installed.
+ * Only these declared strategies are allowed — ASM is not a package manager.
+ */
+export type RuntimeInstallKind = "from-vendor" | "brew" | "npm" | "cmd";
+
+/** Where the expected CLI version comes from (relative to the vendor checkout). */
+export type RuntimeVersionSource =
+  | "package.json"
+  | "pyproject.toml"
+  | "git-tag"
+  | "literal";
+
+/** Declared install strategies for a companion CLI. */
+export interface RuntimeInstall {
+  /** Preferred strategy when multiple are present. Default order: from-vendor → brew → npm → cmd. */
+  preferred?: RuntimeInstallKind;
+  /** Shell command run with cwd = vendor checkout (best for monorepos: skill + CLI same commit). */
+  fromVendor?: string;
+  /** Homebrew formula, e.g. "lycorp-jp/tap/sim-use". */
+  brew?: string;
+  /** npm package, e.g. "@jackwener/opencli". */
+  npm?: string;
+  /** Explicit shell command (full control; opt-in only). */
+  cmd?: string;
+}
+
+/**
+ * Companion runtime (CLI binary) bound to a vendor skill package.
+ * Skill content and the binary can drift when installed via different channels.
+ */
+export interface RuntimeSpec {
+  /** Binary name expected on PATH. */
+  bin: string;
+  /** How to resolve the expected version. Default: package.json if present, else git-tag. */
+  versionFrom?: RuntimeVersionSource;
+  /** Expected version when versionFrom = "literal". */
+  version?: string;
+  /** Command that prints the installed version. Default: `<bin> --version`. */
+  versionCmd?: string;
+  install?: RuntimeInstall;
+}
+
 /** Vendor skill configuration from asm.toml [vendor.*] */
 export interface VendorConfig {
   url?: string;
   path?: string;
+  /** Optional companion CLI bound to this vendor package. */
+  runtime?: RuntimeSpec;
 }
 
 /** Application configuration */
@@ -30,6 +75,37 @@ export interface UpgradeInfo {
   currentRef: string;
   remoteRef: string;
   summary: string;
+}
+
+/** Drift status of a vendor's companion CLI vs the skill checkout. */
+export type RuntimeStatus =
+  | "ok"
+  | "ahead"
+  | "behind"
+  | "missing"
+  | "unreadable"
+  | "no-expected";
+
+/** Result of checking one vendor runtime. */
+export interface RuntimeCheck {
+  vendor: string;
+  bin: string;
+  status: RuntimeStatus;
+  expectedVersion: string | null;
+  installedVersion: string | null;
+  path: string | null;
+  /** Resolved install strategy, if any is declared. */
+  strategy: RuntimeInstallKind | null;
+  /** Human-readable detail (error text, note, etc.). */
+  detail?: string;
+}
+
+/** Result of attempting to install/fix one vendor runtime. */
+export interface RuntimeInstallResult {
+  vendor: string;
+  strategy: RuntimeInstallKind;
+  ok: boolean;
+  message: string;
 }
 
 /** Registry metadata for a single skill */

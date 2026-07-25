@@ -111,11 +111,17 @@ export async function checkUpgrades(
 
   const vendorSkills = skills.value.filter((s) => s.type === "vendor");
 
+  // A vendor repo can contain multiple skills; check each repo once, not once per skill.
+  const seenRepos = new Set<string>();
   const upgrades: UpgradeInfo[] = [];
 
   for (const skill of vendorSkills) {
-    const skillDir = vendorSkillDir(regPath, skill.name);
-    const result = await checkSkillUpgrade(skill.name, skillDir);
+    const repoName = skill.vendorRepo ?? skill.name;
+    if (seenRepos.has(repoName)) continue;
+    seenRepos.add(repoName);
+
+    const skillDir = vendorSkillDir(regPath, repoName);
+    const result = await checkSkillUpgrade(repoName, skillDir);
     if (!result.ok) return result;
 
     if (result.value !== null) {

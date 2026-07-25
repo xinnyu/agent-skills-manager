@@ -62,6 +62,65 @@ describe("readConfig()", () => {
     }
   });
 
+  test("reads [vendor.*.runtime] companion CLI declarations", async () => {
+    const path = join(tempDir, "asm.toml");
+    await writeFile(
+      path,
+      `[config]
+
+[vendor.opencli]
+url = "https://github.com/example/opencli.git"
+
+[vendor.opencli.runtime]
+bin = "opencli"
+version_from = "package.json"
+version_cmd = "opencli --version"
+
+[vendor.opencli.runtime.install]
+preferred = "npm"
+npm = "@jackwener/opencli"
+from_vendor = "npm install -g ."
+`,
+    );
+
+    const result = await readConfig(path);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.vendors["opencli"]).toEqual({
+        url: "https://github.com/example/opencli.git",
+        runtime: {
+          bin: "opencli",
+          versionFrom: "package.json",
+          versionCmd: "opencli --version",
+          install: {
+            preferred: "npm",
+            npm: "@jackwener/opencli",
+            fromVendor: "npm install -g .",
+          },
+        },
+      });
+    }
+  });
+
+  test("rejects invalid runtime preferred strategy", async () => {
+    const path = join(tempDir, "asm.toml");
+    await writeFile(
+      path,
+      `[vendor.x]
+url = "https://example.com/x.git"
+
+[vendor.x.runtime]
+bin = "x"
+
+[vendor.x.runtime.install]
+preferred = "cargo"
+`,
+    );
+
+    const result = await readConfig(path);
+    expect(result.ok).toBe(false);
+  });
+
   test("returns error for invalid TOML syntax", async () => {
     const path = join(tempDir, "asm.toml");
     await writeFile(path, "{{invalid toml}}");

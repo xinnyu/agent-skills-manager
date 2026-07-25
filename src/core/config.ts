@@ -3,6 +3,10 @@ import { dirname } from "node:path";
 import type {
   AsmConfig,
   Result,
+  RuntimeInstall,
+  RuntimeInstallKind,
+  RuntimeSpec,
+  RuntimeVersionSource,
   Scope,
   TargetsConfig,
   VendorConfig,
@@ -10,6 +14,20 @@ import type {
 import { ok, err } from "../utils/result";
 import { readRegistryPath, asmTomlPath } from "../utils/paths";
 import { readToml, writeToml } from "../utils/toml";
+
+const VALID_RUNTIME_INSTALL_KINDS: ReadonlySet<string> = new Set<RuntimeInstallKind>([
+  "from-vendor",
+  "brew",
+  "npm",
+  "cmd",
+]);
+
+const VALID_VERSION_SOURCES: ReadonlySet<string> = new Set<RuntimeVersionSource>([
+  "package.json",
+  "pyproject.toml",
+  "git-tag",
+  "literal",
+]);
 
 const DEFAULTS: AsmConfig = {
   registryPath: "",
@@ -64,6 +82,127 @@ function parseTargetsSection(raw: unknown): Result<TargetsConfig> {
   return ok(targets);
 }
 
+/** Parse a RuntimeSpec from a TOML table (snake_case keys). Exported for vendor asm.runtime.toml. */
+export function parseRuntimeSpec(raw: unknown, label: string): Result<RuntimeSpec> {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    return err(`Invalid ${label}: must be a table`);
+  }
+
+  const obj = raw as Record<string, unknown>;
+
+  if (typeof obj.bin !== "string" || obj.bin.trim() === "") {
+    return err(`Invalid ${label}: "bin" is required and must be a non-empty string`);
+  }
+
+  const spec: RuntimeSpec = { bin: obj.bin.trim() };
+
+  if ("version_from" in obj) {
+    if (typeof obj.version_from !== "string" || !VALID_VERSION_SOURCES.has(obj.version_from)) {
+      return err(
+        `Invalid ${label}.version_from: must be one of package.json | pyproject.toml | git-tag | literal`,
+      );
+    }
+    spec.versionFrom = obj.version_from as RuntimeVersionSource;
+  }
+
+  if ("version" in obj) {
+    if (typeof obj.version !== "string") {
+      return err(`Invalid ${label}.version: expected string`);
+    }
+    spec.version = obj.version;
+  }
+
+  if (spec.versionFrom === "literal" && !spec.version) {
+    return err(`Invalid ${label}: version_from = "literal" requires "version"`);
+  }
+
+  if ("version_cmd" in obj) {
+    if (typeof obj.version_cmd !== "string" || obj.version_cmd.trim() === "") {
+      return err(`Invalid ${label}.version_cmd: expected non-empty string`);
+    }
+    spec.versionCmd = obj.version_cmd.trim();
+  }
+
+  if ("install" in obj) {
+    const install = parseRuntimeInstall(obj.install, `${label}.install`);
+    if (!install.ok) return install;
+    if (install.value) {
+      spec.install = install.value;
+    }
+  }
+
+  return ok(spec);
+}
+
+function parseRuntimeInstall(raw: unknown, label: string): Result<RuntimeInstall | undefined> {
+  if (raw === undefined || raw === null) {
+    return ok(undefined);
+  }
+
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    return err(`Invalid ${label}: must be a table`);
+  }
+
+  const obj = raw as Record<string, unknown>;
+  const install: RuntimeInstall = {};
+
+  if ("preferred" in obj) {
+    if (typeof obj.preferred !== "string" || !VALID_RUNTIME_INSTALL_KINDS.has(obj.preferred)) {
+      return err(
+        `Invalid ${label}.preferred: must be one of from-vendor | brew | npm | cmd`,
+      );
+    }
+    install.preferred = obj.preferred as RuntimeInstallKind;
+  }
+
+  if ("from_vendor" in obj) {
+    if (typeof obj.from_vendor !== "string" || obj.from_vendor.trim() === "") {
+      return err(`Invalid ${label}.from_vendor: expected non-empty string`);
+    }
+    install.fromVendor = obj.from_vendor.trim();
+  }
+
+  if ("brew" in obj) {
+    if (typeof obj.brew !== "string" || obj.brew.trim() === "") {
+      return err(`Invalid ${label}.brew: expected non-empty string`);
+    }
+    install.brew = obj.brew.trim();
+  }
+
+  if ("npm" in obj) {
+    if (typeof obj.npm !== "string" || obj.npm.trim() === "") {
+      return err(`Invalid ${label}.npm: expected non-empty string`);
+    }
+    install.npm = obj.npm.trim();
+  }
+
+  if ("cmd" in obj) {
+    if (typeof obj.cmd !== "string" || obj.cmd.trim() === "") {
+      return err(`Invalid ${label}.cmd: expected non-empty string`);
+    }
+    install.cmd = obj.cmd.trim();
+  }
+
+  if (
+    install.preferred &&
+    ((install.preferred === "from-vendor" && !install.fromVendor) ||
+      (install.preferred === "brew" && !install.brew) ||
+      (install.preferred === "npm" && !install.npm) ||
+      (install.preferred === "cmd" && !install.cmd))
+  ) {
+    return err(
+      `Invalid ${label}: preferred = "${install.preferred}" but that strategy is not configured`,
+    );
+  }
+
+  if (!install.fromVendor && !install.brew && !install.npm && !install.cmd) {
+    // Empty install table is allowed (check-only companion).
+    return ok(Object.keys(install).length > 0 ? install : undefined);
+  }
+
+  return ok(install);
+}
+
 function parseVendorSection(name: string, raw: unknown): Result<VendorConfig> {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     return err(`Invalid [vendor.${name}]: must be a table`);
@@ -92,6 +231,12 @@ function parseVendorSection(name: string, raw: unknown): Result<VendorConfig> {
 
   if (!vendor.url && !vendor.path) {
     return err(`[vendor.${name}]: must specify either "url" or "path"`);
+  }
+
+  if ("runtime" in obj) {
+    const runtime = parseRuntimeSpec(obj.runtime, `[vendor.${name}.runtime]`);
+    if (!runtime.ok) return runtime;
+    vendor.runtime = runtime.value;
   }
 
   return ok(vendor);

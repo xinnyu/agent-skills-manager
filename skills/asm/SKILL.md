@@ -1,6 +1,6 @@
 ---
 name: asm
-description: "Manage AI agent skills via ASM (Agent Skills Manager). Use when user asks to install, remove, search, upgrade, list, scan, discover, create, fix, or review skills. Triggers on: \"装 skill\", \"安装 skill\", \"搜索 skill\", \"列出 skill\", \"升级 skill\", \"扫描 skill\", \"发现 skill\", \"散装 skill\", \"加 skill\", \"把 skill 加到\", \"帮我加一下\", \"asm\", \"install skill\", \"add skill\", \"remove skill\", \"search skill\", \"upgrade skill\", \"scan skill\", \"discover skill\", \"list skills\", \"skill 管理\", \"创建 skill\", \"写个 skill\", \"create a skill\", \"build a skill\", \"新建 skill\", \"修复 skill\", \"fix skill\", \"检查 skill\", \"审查 skill\", \"改进 skill\", \"优化 skill\"."
+description: "Manage AI agent skills via ASM (Agent Skills Manager). Use when user asks to install, remove, search, upgrade, list, scan, discover, create, fix, review skills, or check/fix companion CLI drift (doctor). Triggers on: \"装 skill\", \"安装 skill\", \"搜索 skill\", \"列出 skill\", \"升级 skill\", \"扫描 skill\", \"发现 skill\", \"散装 skill\", \"加 skill\", \"把 skill 加到\", \"帮我加一下\", \"asm\", \"install skill\", \"add skill\", \"remove skill\", \"search skill\", \"upgrade skill\", \"scan skill\", \"discover skill\", \"list skills\", \"skill 管理\", \"创建 skill\", \"写个 skill\", \"create a skill\", \"build a skill\", \"新建 skill\", \"修复 skill\", \"fix skill\", \"检查 skill\", \"审查 skill\", \"改进 skill\", \"优化 skill\", \"doctor\", \"CLI 漂移\", \"runtime drift\"."
 ---
 
 # ASM (Agent Skills Manager)
@@ -112,9 +112,16 @@ asm add <name> --path /path/to/local/repo
 asm remove <name>
 asm remove vendor/<name>
 
-# 升级 vendor skill 到最新版本
-asm upgrade [name]
+# 升级 vendor skill 到最新版本（默认只动 skill，并报告 companion CLI 漂移）
+asm upgrade
 asm upgrade --dry-run
+# 同时按声明的策略安装/升级 missing 或 behind 的 companion CLI
+asm upgrade --runtime
+
+# 检查 skill 与 companion CLI 版本是否对齐（不改系统）
+asm doctor
+# 按声明策略修复 missing/behind 的 CLI
+asm doctor --fix
 
 # 同步 symlink（根据 manifest 重建所有 symlink）
 asm sync
@@ -150,6 +157,43 @@ path = "/Users/pxy/Developer/agent-skills-manager"  # 本地：symlink，改了�
 ```
 
 一个 vendor repo 可以包含多个 skill，ASM 会递归扫描所有 `SKILL.md`。
+
+## Companion runtime（skill + CLI 对齐）
+
+很多 vendor **skill 文档和 CLI 二进制同仓**，但安装通道不同（submodule vs brew/npm），`asm upgrade` 只 pull skill 会导致文档比 CLI 新。
+
+用可选的 runtime 声明把它们绑在一起——**默认只检测，不自动装全局 binary**。
+
+```toml
+[vendor.opencli]
+url = "https://github.com/nicepkg/opencli.git"
+
+[vendor.opencli.runtime]
+bin = "opencli"
+version_from = "package.json"          # package.json | pyproject.toml | git-tag | literal
+version_cmd = "opencli --version"      # 默认 `<bin> --version`
+
+[vendor.opencli.runtime.install]
+preferred = "npm"                      # from-vendor | brew | npm | cmd
+npm = "@jackwener/opencli"
+from_vendor = "npm install -g ."       # cwd = vendor checkout，skill 与 CLI 同 commit
+```
+
+也可在 vendor 仓根放 `asm.runtime.toml`（`[runtime]` 表）；**本地 `asm.toml` 覆盖 vendor 声明**。
+
+| 策略 | 含义 |
+|------|------|
+| `from-vendor` | 在 vendor 目录执行命令（monorepo 对齐最稳） |
+| `brew` / `npm` | 已发布通道 |
+| `cmd` | 任意 shell（pipx 等） |
+
+行为：
+
+- `asm upgrade` — pull skill + **报告** runtime drift，提示加 `--runtime`
+- `asm upgrade --runtime` / `asm doctor --fix` — 只对 `missing` / `behind` 按声明策略安装
+- 纯 markdown skill 不声明 runtime，零负担
+
+当用户说「升级 skill」且涉及 opencli/sim-use/agent-browser 这类工具时：先 `asm upgrade`，看到 drift 再确认是否 `--runtime`。
 
 ## 常见操作示例
 

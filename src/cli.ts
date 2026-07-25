@@ -9,6 +9,7 @@ import { registerSyncCommand } from "./commands/sync";
 import { registerListCommand } from "./commands/list";
 import { registerInfoCommand } from "./commands/info";
 import { registerUpgradeCommand } from "./commands/upgrade";
+import { registerDoctorCommand } from "./commands/doctor";
 import { registerScanCommand } from "./commands/scan";
 import { registerDiscoverCommand } from "./commands/discover";
 
@@ -27,6 +28,7 @@ registerSyncCommand(program);
 registerListCommand(program);
 registerInfoCommand(program);
 registerUpgradeCommand(program);
+registerDoctorCommand(program);
 registerScanCommand(program);
 registerDiscoverCommand(program);
 
