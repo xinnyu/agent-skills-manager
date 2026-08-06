@@ -114,9 +114,34 @@ describe("CLI lifecycle: init → create → add vendor → sync → list → in
     const result = await runCli(["sync"], env.testDir);
     expect(result.exitCode).toBe(0);
 
-    // Symlink should exist at ~/.claude/skills/my-skill
-    const target = await readlink(join(env.skillsDir, "my-skill"));
-    expect(target).toBe(join(env.registryDir, "core", "my-skill"));
+    for (const skillsDir of [
+      env.skillsDir,
+      env.codexSkillsDir,
+      env.kiroSkillsDir,
+    ]) {
+      const target = await readlink(join(skillsDir, "my-skill"));
+      expect(target).toBe(join(env.registryDir, "core", "my-skill"));
+    }
+  });
+
+  test("sync backfills missing targets from an older asm.toml", async () => {
+    await runCli(["init", env.registryDir], env.testDir);
+    await writeFile(
+      env.asmTomlPath,
+      '[config]\ndefault_scope = "user"\n\n[targets]\nclaude = "~/.claude/skills"\n',
+      "utf-8",
+    );
+    await runCli(["create", "my-skill"], env.testDir);
+
+    const result = await runCli(["sync"], env.testDir);
+    expect(result.exitCode).toBe(0);
+
+    expect(await readlink(join(env.codexSkillsDir, "my-skill"))).toBe(
+      join(env.registryDir, "core", "my-skill"),
+    );
+    expect(await readlink(join(env.kiroSkillsDir, "my-skill"))).toBe(
+      join(env.registryDir, "core", "my-skill"),
+    );
   });
 
   test("list reflects skills in registry", async () => {

@@ -1,12 +1,12 @@
 # ASM — Agent Skills Manager
 
-集中管理 [Claude Code](https://docs.anthropic.com/en/docs/claude-code) 和 [Codex](https://openai.com/index/introducing-codex/) Skills 的 CLI 工具。通过中央注册表统一安装、创建、同步和发现 Skills，基于 symlink 部署到各 agent 目录。
+集中管理 [Claude Code](https://docs.anthropic.com/en/docs/claude-code)、[Codex](https://openai.com/index/introducing-codex/) 和 [Kiro](https://kiro.dev/) Skills 的 CLI 工具。通过中央注册表统一安装、创建、同步和发现 Skills，基于 symlink 部署到各 agent 目录。
 
 ## 为什么需要 ASM？
 
-Claude Code 和 Codex 等 AI 编程 agent 支持 **Skills** — 用 Markdown 文件定制 agent 行为。随着 skill 数量增长，手动管理变得越来越痛苦：
+Claude Code、Codex 和 Kiro 等 AI 编程 agent 支持 **Skills** — 用 Markdown 文件定制 agent 行为。随着 skill 数量增长，手动管理变得越来越痛苦：
 
-- Skills 散落在 `~/.claude/skills/`、`~/.agents/skills/` 和各项目目录中
+- Skills 散落在 `~/.claude/skills/`、`~/.agents/skills/`、`~/.kiro/skills/` 和各项目目录中
 - 无法跨机器、跨团队共享
 - 不清楚哪些 skill 装在了哪里
 
@@ -38,7 +38,7 @@ asm create my-skill
 
 # 3. 同步到 agent 目录
 asm sync
-# symlink 会创建到 ~/.claude/skills/ 和 ~/.agents/skills/
+# symlink 会创建到 ~/.claude/skills/、~/.agents/skills/ 和 ~/.kiro/skills/
 
 # 4. 从 GitHub 添加第三方 skill 包
 asm add awesome-skills --url https://github.com/user/awesome-skills.git
@@ -120,10 +120,11 @@ symlink 部署到的 agent 目录：
 |------|------|
 | Claude Code | `~/.claude/skills/` |
 | Codex | `~/.agents/skills/` |
+| Kiro | `~/.kiro/skills/` |
 
 ### 作用域（Scope）
 
-- **用户级（user）** — skill 同步到全局 agent 目录（`~/.claude/skills/`、`~/.agents/skills/`）
+- **用户级（user）** — skill 同步到全局 agent 目录（`~/.claude/skills/`、`~/.agents/skills/`、`~/.kiro/skills/`）
 - **项目级（project）** — skill 同步到项目本地目录（`.claude/skills/`、`.agents/skills/`），通过 `.asm/skills.toml` 清单声明
 
 ## 命令一览
@@ -163,6 +164,7 @@ default_scope = "user"
 [targets]
 claude = "~/.claude/skills"
 codex = "~/.agents/skills"
+kiro = "~/.kiro/skills"
 
 [vendor.awesome-skills]
 url = "https://github.com/user/awesome-skills.git"

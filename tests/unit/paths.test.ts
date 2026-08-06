@@ -13,6 +13,7 @@ import {
   registryPath,
   userSkillsDir,
   userCodexSkillsDir,
+  userKiroSkillsDir,
   managedTomlPath,
   projectClaudeSkillsDir,
   projectCodexSkillsDir,
@@ -136,6 +137,12 @@ describe("userSkillsDir()", () => {
 describe("userCodexSkillsDir()", () => {
   test("returns ~/.agents/skills", () => {
     expect(userCodexSkillsDir()).toBe(join(tempDir, ".agents", "skills"));
+  });
+});
+
+describe("userKiroSkillsDir()", () => {
+  test("returns ~/.kiro/skills", () => {
+    expect(userKiroSkillsDir()).toBe(join(tempDir, ".kiro", "skills"));
   });
 });
 

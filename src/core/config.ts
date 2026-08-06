@@ -36,6 +36,12 @@ const DEFAULTS: AsmConfig = {
   vendors: {},
 };
 
+const DEFAULT_TARGETS: TargetsConfig = {
+  claude: "~/.claude/skills",
+  codex: "~/.agents/skills",
+  kiro: "~/.kiro/skills",
+};
+
 const VALID_SCOPES: ReadonlySet<string> = new Set<Scope>(["user", "project"]);
 
 
@@ -261,6 +267,37 @@ function parseVendorsTable(raw: unknown): Result<Record<string, VendorConfig>> {
   return ok(vendors);
 }
 
+function applyDefaultTargets(raw: Record<string, unknown>): boolean {
+  let changed = false;
+
+  if (raw.config === undefined) {
+    raw.config = {
+      default_scope: "user",
+    };
+    changed = true;
+  }
+
+  if (raw.targets === undefined) {
+    raw.targets = { ...DEFAULT_TARGETS };
+    changed = true;
+    return changed;
+  }
+
+  if (typeof raw.targets !== "object" || raw.targets === null || Array.isArray(raw.targets)) {
+    return changed;
+  }
+
+  const targets = raw.targets as Record<string, unknown>;
+  for (const [name, dir] of Object.entries(DEFAULT_TARGETS)) {
+    if (!(name in targets)) {
+      targets[name] = dir;
+      changed = true;
+    }
+  }
+
+  return changed;
+}
+
 function parseAsmToml(raw: Record<string, unknown>, regDir: string): Result<AsmConfig> {
   const config: AsmConfig = { ...DEFAULTS, registryPath: regDir };
 
@@ -315,9 +352,27 @@ export async function readConfig(overridePath?: string): Promise<Result<AsmConfi
 
   if (!raw.ok) {
     if (raw.error.includes("File not found")) {
-      return ok({ ...DEFAULTS, registryPath: regDir });
+      const initWrite = await writeToml(tomlPath, {
+        config: {
+          default_scope: "user",
+        },
+        targets: DEFAULT_TARGETS,
+      });
+      if (!initWrite.ok) return initWrite;
+      return ok({
+        ...DEFAULTS,
+        registryPath: regDir,
+        defaultScope: "user",
+        targets: { ...DEFAULT_TARGETS },
+      });
     }
     return raw;
+  }
+
+  const changed = applyDefaultTargets(raw.value);
+  if (changed) {
+    const write = await writeToml(tomlPath, raw.value);
+    if (!write.ok) return write;
   }
 
   return parseAsmToml(raw.value, regDir);
@@ -364,21 +419,7 @@ export async function writeDefaultAsmToml(registryDir: string): Promise<Result<v
   const existing = await readToml(tomlPath);
   if (existing.ok) {
     const raw = existing.value;
-    let changed = false;
-
-    if (!raw.config || typeof raw.config !== "object") {
-      raw.config = {
-        default_scope: "user",
-      };
-      changed = true;
-    }
-
-    if (!raw.targets || typeof raw.targets !== "object") {
-      raw.targets = {
-        claude: "~/.claude/skills",
-      };
-      changed = true;
-    }
+    const changed = applyDefaultTargets(raw);
 
     if (changed) {
       return writeToml(tomlPath, raw);
@@ -394,8 +435,6 @@ export async function writeDefaultAsmToml(registryDir: string): Promise<Result<v
     config: {
       default_scope: "user",
     },
-    targets: {
-      claude: "~/.claude/skills",
-    },
+    targets: DEFAULT_TARGETS,
   });
 }
