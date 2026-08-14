@@ -1,10 +1,26 @@
-import type { Result, UpgradeInfo } from "../types";
+import { stat } from "node:fs/promises";
+import { join } from "node:path";
+
+import type { RegistrySkill, Result, UpgradeInfo } from "../types";
 import { ok, err } from "../utils/result";
 import { gitExec } from "../utils/git";
 import { registryPath } from "../utils/paths";
 import { readConfig } from "./config";
 import { scanRegistry } from "./registry";
 import { syncSkills } from "./sync-engine";
+
+/**
+ * Whether `dir` is something git can operate in. Follows symlinks, so local
+ * path vendors pointing at a real clone still count.
+ */
+async function isGitRepo(dir: string): Promise<boolean> {
+  try {
+    const s = await stat(join(dir, ".git"));
+    return s.isDirectory() || s.isFile(); // .git is a file in submodules
+  } catch {
+    return false;
+  }
+}
 
 /** Detect the default remote branch (e.g., main, master) for a submodule. */
 async function detectDefaultBranch(cwd: string): Promise<Result<string>> {
@@ -87,9 +103,30 @@ async function executeSkillUpgrade(
   return ok(undefined);
 }
 
-/** Resolve vendor skill directory within the registry. */
-function vendorSkillDir(regPath: string, name: string): string {
-  return `${regPath}/vendor/${name}`;
+/** Resolve a vendor repo's directory within the registry. */
+function vendorSkillDir(regPath: string, vendorRepo: string): string {
+  return `${regPath}/vendor/${vendorRepo}`;
+}
+
+/**
+ * The git unit is the vendor *repo*, not the skill. A repo may ship many skills
+ * (mattpocock-skills has 20+) and their directory names have nothing to do with
+ * the repo name, so upgrading must key on `vendorRepo` — keying on `skill.name`
+ * builds paths like vendor/ask-matt that don't exist, and bun reports the
+ * missing cwd as `posix_spawn 'git'` ENOENT, which reads like git is missing.
+ */
+function uniqueVendorRepos(skills: RegistrySkill[]): string[] {
+  const repos: string[] = [];
+  const seen = new Set<string>();
+  for (const skill of skills) {
+    if (skill.type !== "vendor") continue;
+    // Fall back to the skill name for flat repos (SKILL.md at the repo root).
+    const repo = skill.vendorRepo ?? skill.name;
+    if (seen.has(repo)) continue;
+    seen.add(repo);
+    repos.push(repo);
+  }
+  return repos;
 }
 
 /**
@@ -109,19 +146,17 @@ export async function checkUpgrades(
   const skills = await scanRegistry(regPath);
   if (!skills.ok) return skills;
 
-  const vendorSkills = skills.value.filter((s) => s.type === "vendor");
-
-  // A vendor repo can contain multiple skills; check each repo once, not once per skill.
-  const seenRepos = new Set<string>();
   const upgrades: UpgradeInfo[] = [];
 
-  for (const skill of vendorSkills) {
-    const repoName = skill.vendorRepo ?? skill.name;
-    if (seenRepos.has(repoName)) continue;
-    seenRepos.add(repoName);
+  for (const repo of uniqueVendorRepos(skills.value)) {
+    const repoDir = vendorSkillDir(regPath, repo);
 
-    const skillDir = vendorSkillDir(regPath, repoName);
-    const result = await checkSkillUpgrade(repoName, skillDir);
+    // Local path vendors are symlinks the user maintains themselves, and a
+    // vendor may be declared but never initialized. Neither is an error worth
+    // aborting the whole sweep for — skip and keep checking the rest.
+    if (!(await isGitRepo(repoDir))) continue;
+
+    const result = await checkSkillUpgrade(repo, repoDir);
     if (!result.ok) return result;
 
     if (result.value !== null) {
@@ -155,13 +190,15 @@ export async function upgradeSkills(
     regPath = registryPath(config.value);
   }
 
+  // checkUpgrades only reports repos it could actually reach, so every name
+  // here is a real git repo under vendor/.
   for (const upgrade of check.value) {
-    const skillDir = vendorSkillDir(regPath, upgrade.name);
+    const repoDir = vendorSkillDir(regPath, upgrade.name);
 
-    const branch = await detectDefaultBranch(skillDir);
+    const branch = await detectDefaultBranch(repoDir);
     if (!branch.ok) return branch;
 
-    const exec = await executeSkillUpgrade(skillDir, branch.value);
+    const exec = await executeSkillUpgrade(repoDir, branch.value);
     if (!exec.ok) return exec;
   }
 
